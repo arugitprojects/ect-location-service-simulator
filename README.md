@@ -67,7 +67,8 @@ ect-location-server/
 │   ├── healthcheck.js
 │   ├── src/
 │   └── test/
-├── docker-compose.yml
+├── docker-compose.yml        Local dev (all 3 ports published)
+├── docker-compose.prod.yml   AWS/production (only frontend published)
 └── README.md
 ```
 
@@ -188,33 +189,33 @@ cd udm-mock && npm install && npm test
 
 Both suites spin up ephemeral in-process servers (no Docker required to run them) and cover the scenarios in [Error handling](#error-handling) above.
 
-## Render deployment
+## AWS EC2 deployment
 
-Each folder builds independently from its own `Dockerfile`, so this repo maps directly onto **three separate Render Web Services**, all built from this one GitHub repository.
+The three containers deploy as-is to a single EC2 instance via `docker-compose.prod.yml`, which differs from the local `docker-compose.yml` in one way: **only `frontend` publishes a host port (`80`)**. `location-server` and `udm-mock` have no `ports:` mapping at all, so they're reachable from `frontend`/each other over the Compose network by service name (`location-server:3000`, `udm-mock:8080`) but not from the public internet — matching "only Nginx/frontend is public."
 
-> **HTTP/2 note:** the Location Server → UDM Mock call is real cleartext HTTP/2 ("prior knowledge"), which Render's public-facing TLS-terminating edge does not proxy transparently. Deploy `ect-udm-mock` as a **Render Private Service** (internal-only, reachable from other services in the same Render project via its private DNS name over plain TCP) so the raw h2c connection works exactly as it does over the Docker network locally. `ect-location-frontend` and `ect-location-server` are ordinary public **Web Services** — their REST/JSON traffic doesn't care whether the transport underneath is HTTP/1.1 or HTTP/2.
+```bash
+# On the EC2 instance, after Docker + the Compose plugin are installed:
+git clone <repo-url> ect-location-service-simulator
+cd ect-location-service-simulator
+docker compose -f docker-compose.prod.yml up --build -d
+docker compose -f docker-compose.prod.yml ps
+```
 
-1. **`ect-udm-mock`** — Render **Private Service**
-   - Root directory: `udm-mock`
-   - Environment: Docker (uses `udm-mock/Dockerfile`)
-   - Port: `8080`
-   - No public URL; other services reach it at its private hostname (Render shows this after creation, typically `ect-udm-mock:8080` within the same project/environment).
+Security group: only `22` (restricted to your IP), `80`, and `443` need to be open. Never open `3000` or `8080` to `0.0.0.0/0` — the app doesn't need it, and it would expose the internal UDM integration layer directly.
 
-2. **`ect-location-server`** — Render **Web Service**
-   - Root directory: `location-server`
-   - Environment: Docker (uses `location-server/Dockerfile`)
-   - Port: `3000`
-   - Env var: `UDM_URL` = the `ect-udm-mock` private service's internal URL (e.g. `http://ect-udm-mock:8080`)
-   - Health check path: `/health`
+A `t3.micro` has 1&nbsp;GB of RAM and no swap by default, which is tight for `npm ci` + `ng build` during the frontend image build. If the build gets OOM-killed, add a swap file first:
 
-3. **`ect-location-frontend`** — Render **Web Service**
-   - Root directory: `frontend`
-   - Environment: Docker (uses `frontend/Dockerfile`)
-   - Port: `80`
-   - Env var: `LOCATION_SERVER_URL` = the `ect-location-server` service's public Render URL (e.g. `https://ect-location-server.onrender.com`)
-   - Health check path: `/health`
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile swap swap defaults 0 0' | sudo tee -a /etc/fstab
+```
 
-Create all three from the same GitHub repo (`ect-location-service-simulator`), pointing each Render service at a different **root directory** so it only builds its own `Dockerfile`.
+HTTPS (`443`) needs a real domain name pointed at the instance before a certificate can be issued (e.g. via Let's Encrypt/Certbot) — not set up here since deployment currently targets a bare public IP.
+
+### Render as an alternative
+
+The same three containers also deploy cleanly to Render as three separate services, with one caveat worth knowing regardless of which platform is used: the Location Server → UDM Mock call is real cleartext HTTP/2 ("prior knowledge"), which a public TLS-terminating edge (Render's, or any reverse proxy/load balancer in front of a public endpoint) won't proxy transparently. On Render this means the UDM Mock should be a **Private Service** rather than a public Web Service — Render's free tier doesn't offer Private Services, so that path requires a paid plan. On EC2, the equivalent is exactly what `docker-compose.prod.yml` already does: keep `udm-mock` off any publicly exposed port so the internal call stays real h2c over the Compose network, with no separate paid tier needed.
 
 ## Interview talking points
 

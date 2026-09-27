@@ -1,0 +1,28 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    environment:
+      LOCATION_SERVER_URL: http://location-server:3000
+    depends_on:
+      location-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  location-server:
+    build: ./location-server
+    # No `ports:` mapping - only reachable from other containers on the
+    # Compose network via the "location-server" service name. Not published
+    # to the host, so it is not reachable from the public internet.
+    environment:
+      UDM_URL: http://udm-mock:8080
+    depends_on:
+      udm-mock:
+        condition: service_healthy
+    restart: unless-stopped
+
+  udm-mock:
+    build: ./udm-mock
+    # No `ports:` mapping - internal only, same reasoning as location-server.
+    restart: unless-stopped
