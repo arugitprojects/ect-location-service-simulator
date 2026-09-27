@@ -1,0 +1,75 @@
+<div class="shell">
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">TELECOM SERVICE DEMO</div>
+      <h1>Subscriber Location Server</h1>
+      <p>Angular → REST API → Location Server → HTTP/2 → UDM</p>
+    </div>
+    <div class="status"><span></span> DEMO ONLINE</div>
+  </header>
+
+  <main>
+    <section class="hero card">
+      <div>
+        <div class="label">SUBSCRIBER LOOKUP</div>
+        <h2>Find subscriber location</h2>
+        <p class="muted">Enter an IMSI. The UI calls the application API; the backend performs the UDM integration.</p>
+      </div>
+      <form (ngSubmit)="findLocation()" class="lookup">
+        <label for="imsi">IMSI</label>
+        <div class="input-row">
+          <input id="imsi" name="imsi" [(ngModel)]="imsi" inputmode="numeric" maxlength="15" placeholder="262011234567890" />
+          <button type="submit" [disabled]="loading || !imsi">{{ loading ? 'Querying…' : 'Find location' }}</button>
+        </div>
+        <div class="hint">14–15 digits · Example: 262011234567890</div>
+      </form>
+    </section>
+
+    <section class="examples">
+      <button (click)="useExample('262011234567890')">Munich</button>
+      <button (click)="useExample('262021234567891')">Berlin</button>
+      <button (click)="useExample('262031234567892')">Hamburg</button>
+    </section>
+
+    <section *ngIf="error" class="error card">{{ error }}</section>
+
+    <section *ngIf="result" class="grid">
+      <div class="card location-card">
+        <div class="label">LOCATION RESULT</div>
+        <div class="city">{{ result.location.city }}</div>
+        <div class="country">{{ result.location.country }}</div>
+        <div class="coords">{{ result.location.latitude }}, {{ result.location.longitude }}</div>
+        <div class="chips">
+          <span>{{ result.location.technology }}</span>
+          <span>{{ result.location.cellId }}</span>
+          <span>ACTIVE</span>
+        </div>
+      </div>
+
+      <div class="card trace-card">
+        <div class="label">REQUEST TRACE</div>
+        <div class="trace">
+          <div><b>1</b><span>Angular UI</span><small>POST /api/location</small></div>
+          <div><b>2</b><span>Location Server</span><small>Validate IMSI + orchestrate</small></div>
+          <div><b>3</b><span>UDM Mock</span><small>GET /udm/location/:imsi · HTTP/2</small></div>
+        </div>
+        <div class="meta">
+          <span>Latency {{ result.latencyMs }} ms</span>
+          <span>{{ result.protocol }}</span>
+          <span>{{ result.source }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="architecture card">
+      <div class="label">ARCHITECTURE</div>
+      <div class="flow">
+        <div>Angular<br><small>Web UI</small></div><i>→</i>
+        <div>REST API<br><small>JSON / HTTP</small></div><i>→</i>
+        <div>Location Server<br><small>Node.js</small></div><i>→</i>
+        <div>HTTP/2<br><small>h2c</small></div><i>→</i>
+        <div>UDM Mock<br><small>5G Core placeholder</small></div>
+      </div>
+    </section>
+  </main>
+</div>

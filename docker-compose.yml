@@ -1,0 +1,26 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "4200:80"
+    environment:
+      # Resolved via Docker's service-name DNS - never a hard-coded localhost.
+      LOCATION_SERVER_URL: http://location-server:3000
+    depends_on:
+      location-server:
+        condition: service_healthy
+
+  location-server:
+    build: ./location-server
+    ports:
+      - "3000:3000"
+    environment:
+      UDM_URL: http://udm-mock:8080
+    depends_on:
+      udm-mock:
+        condition: service_healthy
+
+  udm-mock:
+    build: ./udm-mock
+    ports:
+      - "8080:8080"
